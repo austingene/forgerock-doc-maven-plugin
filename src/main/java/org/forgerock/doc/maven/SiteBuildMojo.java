@@ -8,7 +8,7 @@
  * information:
  *     Portions Copyright [yyyy] [name of copyright owner]
  *
- *     Copyright 2012-2013 ForgeRock AS
+ *     Copyright 2012-2014 ForgeRock AS
  *
  */
 
@@ -164,6 +164,8 @@ public class SiteBuildMojo extends AbstractBuildMojo {
                                 element(name("include"), "**/*.rtf"))));
             }
 
+            // The webhelp is handled separately.
+
             return element("resources", r.toArray(new Element[r.size()]));
         }
 
@@ -189,6 +191,31 @@ public class SiteBuildMojo extends AbstractBuildMojo {
                             getResources()),
                     executionEnvironment(getProject(), getSession(),
                             getPluginManager()));
+
+            // The webhelp directory needs to be copied in its entirety
+            // to avoid overwriting other HTML.
+            if (getOutputFormats().contains("webhelp")) {
+
+                // 2.0.15 does not allow <webhelpBaseDir> to be set,
+                // so the output location is hard-coded for now.
+                String webHelpDir =
+                        FilenameUtils.separatorsToUnix(
+                                getDocbkxOutputDirectory().getPath() + "/webhelp");
+                executeMojo(
+                        plugin(groupId("org.apache.maven.plugins"),
+                                artifactId("maven-resources-plugin"),
+                                version(getResourcesVersion())),
+                        goal("copy-resources"),
+                        configuration(element(name("encoding"), "UTF-8"),
+                                element(name("outputDirectory"), siteDocDirectory + "/webhelp"),
+                                element(name("resources"),
+                                        element(name("resource"),
+                                                element(name("directory"), webHelpDir),
+                                                element(name("excludes"),
+                                                        element(name("exclude"), "**/*.target.db"))))),
+                        executionEnvironment(getProject(), getSession(),
+                                getPluginManager()));
+            }
         }
 
         /**

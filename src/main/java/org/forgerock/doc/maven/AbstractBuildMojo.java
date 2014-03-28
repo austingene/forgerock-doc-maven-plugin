@@ -103,6 +103,14 @@ abstract class AbstractBuildMojo extends AbstractMojo {
     private String projectName;
 
     /**
+     * Project version.
+     *
+     * @parameter property="projectVersion"
+     * @required
+     */
+    private String projectVersion;
+
+    /**
      * Google Analytics identifier for the project.
      *
      * @parameter default-value="UA-23412190-14" property="googleAnalyticsId"
@@ -125,6 +133,23 @@ abstract class AbstractBuildMojo extends AbstractMojo {
      * @parameter property="include"
      */
     private String include;
+
+    /**
+     * Project base directory, needed to workaround bugs with *target.db and webhelp.
+     *
+     * @parameter default-value="${basedir}"
+     * @required
+     */
+    private File baseDir;
+
+    /**
+     * Project base directory, needed to workaround bugs with *target.db and webhelp.
+     *
+     * @return {@link #baseDir}
+     */
+    public File getBaseDir() {
+        return baseDir;
+    }
 
     /**
      * Base directory for DocBook XML source files.
@@ -312,7 +337,7 @@ abstract class AbstractBuildMojo extends AbstractMojo {
     /**
      * Version of the branding artifact to use.
      *
-     * @parameter default-value="2.0.1-SNAPSHOT" property="brandingVersion"
+     * @parameter default-value="2.1.0" property="brandingVersion"
      * @required
      */
     private String brandingVersion;
@@ -390,6 +415,30 @@ abstract class AbstractBuildMojo extends AbstractMojo {
      */
     public String getProjectName() {
         return projectName;
+    }
+
+    /**
+     * Project version.
+     *
+     * @return {@link #projectVersion}
+     */
+    public String getProjectVersion() {
+        return projectVersion;
+    }
+
+    /**
+     * URL to JSON object showing latest versions for each project.
+     *
+     * @parameter default-value="http://docs.forgerock.org/latest.php" property="latestJson"
+     * @required
+     */
+    private String latestJson;
+
+    /**
+     * URL to JSON object showing latest versions for each project.
+     */
+    public String getLatestJson() {
+        return latestJson;
     }
 
     /**
@@ -562,7 +611,7 @@ abstract class AbstractBuildMojo extends AbstractMojo {
     /**
      * Return a list of output formats to generate. If no defaults are
      * specified, then the default list of formats includes epub, html, man,
-     * pdf, rtf.
+     * pdf, rtf, webhelp.
      *
      * @param defaults (Restricted) list of formats to consider. Set this to limit
      *                 the list of output formats. Formats are passed on to the
@@ -576,7 +625,7 @@ abstract class AbstractBuildMojo extends AbstractMojo {
         if (defaults.length != 0) {                      // Restrict list.
             formats.addAll(Arrays.asList(defaults));
         } else {
-            formats.addAll(Arrays.asList("epub", "html", "man", "pdf", "rtf"));
+            formats.addAll(Arrays.asList("epub", "html", "man", "pdf", "rtf", "webhelp"));
         }
 
         ArrayList<String> excludes = new ArrayList<String>();

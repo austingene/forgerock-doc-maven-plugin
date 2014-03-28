@@ -8,7 +8,7 @@
  * information:
  *     Portions Copyright [yyyy] [name of copyright owner]
  *
- *     Copyright 2012-2013 ForgeRock AS
+ *     Copyright 2012-2014 ForgeRock AS
  *
  */
 
@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -123,6 +124,8 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
 
         // Build and prepare HTML for publishing.
         if (formats.contains("html")) {
+            getLog().info("Drop in CSS for HTML...");
+            exec.addCustomCss();
             getLog().info("Building single page HTML...");
             getLog().info("...generating olink DB files for single page HTML...");
             exec.buildSingleHTMLOlinkDB(baseConf);
@@ -135,9 +138,23 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
             getLog().info("...generating chunked HTML files...");
             exec.buildChunkedHTML(baseConf);
 
-            getLog().info("...post-processing HTML...");
+            getLog().info("Add JavaScript used in HTML...");
+            addScript();
+            getLog().info("Add files for SyntaxHighlighter in HTML...");
+            addShScripts();
+            addShCss();
+            getLog().info("...additional post-processing for HTML...");
             postProcessHTML(getDocbkxOutputDirectory().getPath()
                     + File.separator + "html");
+        }
+
+        // Build and prepare webhelp for publishing.
+        if (formats.contains("webhelp")) {
+            getLog().info("Building webhelp...");
+            getLog().info("...generating olink DB files for webhelp...");
+            exec.buildWebHelpOlinkDB(baseConf);
+            getLog().info("...generating webhelp output...");
+            exec.buildWebHelp(baseConf);
         }
     }
 
@@ -280,7 +297,7 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                 String sysId = getBuildDirectory().getAbsolutePath()
                         + File.separator + docName + "-" + extension + ".target.db";
 */
-                String sysId = baseDir.getAbsolutePath()
+                String sysId = getBaseDir().getAbsolutePath()
                         + "/target/docbkx/" + extension + "/" + docName
                         + "/index.fo.target.db";
 
@@ -374,13 +391,186 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
     private String singleHTMLCustomization;
 
     /**
-     * Project base directory, needed to find target.db files.
+     * URL to site for published documentation.
      *
-     * @parameter default-value="${basedir}"
+     * @parameter default-value="http://docs.forgerock.org/" property="docsSite"
      * @required
      */
-    private File baseDir;
+    private String docsSite;
 
+    /**
+     * JavaScript file name, found under {@code /js/} in plugin resources.
+     *
+     * @parameter default-value="uses-jquery.js" property="javaScriptFileName"
+     * @required
+     */
+    private String javaScriptFileName;
+
+    /**
+     * Add JavaScript to include in HTML in each document source directory.
+     * See <a href="http://docbook.sourceforge.net/release/xsl/current/doc/html/html.script.html"
+     * >html.script</a> for details.
+     *
+     * @throws MojoExecutionException Failed to add script.
+     */
+    void addScript() throws MojoExecutionException {
+
+        final URL scriptUrl = getClass().getResource("/js/" + javaScriptFileName);
+        String scriptString;
+        try {
+            scriptString = IOUtils.toString(scriptUrl);
+        } catch (IOException ie) {
+            throw new MojoExecutionException("Failed to read " + scriptUrl, ie);
+        }
+
+        if (scriptString != null) {
+            scriptString = scriptString.replace("PROJECT_NAME", getProjectName().toLowerCase());
+            scriptString = scriptString.replace("PROJECT_VERSION", getProjectVersion());
+            scriptString = scriptString.replace("LATEST_JSON", getLatestJson());
+            scriptString = scriptString.replace("DOCS_SITE", docsSite);
+        } else {
+            throw new MojoExecutionException(scriptUrl + " was empty");
+        }
+
+        final Set<String> docNames = DocUtils.getDocumentNames(
+                sourceDirectory, getDocumentSrcName());
+        if (docNames.isEmpty()) {
+            throw new MojoExecutionException("No document names found.");
+        }
+
+        // The html.script parameter should probably take URLs.
+        // When local files are referenced,
+        // the DocBook XSL stylesheets do not copy the .js files.
+        // Instead the files must be copied to the output directories.
+        final String[] outputDirectories =
+        {"", File.separator + FilenameUtils.getBaseName(getDocumentSrcName())};
+
+        for (final String outputDirectory : outputDirectories) {
+
+            for (final String docName : docNames) {
+
+                final File parent = new File(getDocbkxOutputDirectory(),
+                        "html" + File.separator + docName + outputDirectory);
+                final File scriptFile = new File(parent, javaScriptFileName);
+
+                try {
+                    FileUtils.writeStringToFile(scriptFile, scriptString, "UTF-8");
+                } catch (IOException ie) {
+                    throw new MojoExecutionException(
+                            "Failed to write to " + scriptFile.getPath(), ie);
+                }
+
+            }
+
+        }
+
+    }
+
+    /**
+     * SyntaxHighlighter JavaScript files.
+     */
+    private final String[] shJavaScriptFiles = {"shCore.js",
+        "shBrushAci.js",
+        "shBrushBash.js",
+        "shBrushCsv.js",
+        "shBrushHttp.js",
+        "shBrushJava.js",
+        "shBrushJScript.js",
+        "shBrushLDIF.js",
+        "shBrushPlain.js",
+        "shBrushProperties.js",
+        "shBrushXml.js"};
+
+    /**
+     * Add SyntaxHighlighter JavaScript files in each HTML document source directory.
+     *
+     * @throws MojoExecutionException Failed to add scripts.
+     */
+    void addShScripts() throws MojoExecutionException {
+
+        final Set<String> docNames = DocUtils.getDocumentNames(
+                sourceDirectory, getDocumentSrcName());
+        if (docNames.isEmpty()) {
+            throw new MojoExecutionException("No document names found.");
+        }
+
+        for (String scriptName : shJavaScriptFiles) {
+            URL scriptUrl = getClass().getResource("/js/" + scriptName);
+
+            // The html.script parameter should probably take URLs.
+            // When local files are referenced,
+            // the DocBook XSL stylesheets do not copy the .js files.
+            // Instead the files must be copied to the output directories.
+            final String[] outputDirectories =
+            {"", File.separator + FilenameUtils.getBaseName(getDocumentSrcName())};
+
+            for (final String outputDirectory : outputDirectories) {
+
+                for (final String docName : docNames) {
+
+                    final File parent = new File(getDocbkxOutputDirectory(),
+                            "html" + File.separator + docName + outputDirectory
+                                    + File.separator + "sh");
+                    final File scriptFile = new File(parent, scriptName);
+
+                    try {
+                        FileUtils.copyURLToFile(scriptUrl, scriptFile);
+                    } catch (IOException ie) {
+                        throw new MojoExecutionException(
+                                "Failed to write to " + scriptFile.getPath(), ie);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * SyntaxHighlighter CSS files.
+     */
+    private final String[] shCssFiles = {"shCore.css", "shCoreEclipse.css", "shThemeEclipse.css"};
+
+    /**
+     * Add SyntaxHighlighter CSS files in each HTML document source directory.
+     *
+     * @throws MojoExecutionException Failed to add scripts.
+     */
+    void addShCss() throws MojoExecutionException {
+
+        final Set<String> docNames = DocUtils.getDocumentNames(
+                sourceDirectory, getDocumentSrcName());
+        if (docNames.isEmpty()) {
+            throw new MojoExecutionException("No document names found.");
+        }
+
+        for (String styleSheetName : shCssFiles) {
+            URL styleSheetUrl = getClass().getResource("/css/" + styleSheetName);
+
+            // The html.stylesheet parameter should probably take URLs.
+            // When local files are referenced,
+            // the DocBook XSL stylesheets do not copy the .css files.
+            // Instead the files must be copied to the output directories.
+            final String[] outputDirectories =
+            {"", File.separator + FilenameUtils.getBaseName(getDocumentSrcName())};
+
+            for (final String outputDirectory : outputDirectories) {
+
+                for (final String docName : docNames) {
+
+                    final File parent = new File(getDocbkxOutputDirectory(),
+                            "html" + File.separator + docName + outputDirectory
+                                + File.separator + "sh");
+                    final File styleSheetFile = new File(parent, styleSheetName);
+
+                    try {
+                        FileUtils.copyURLToFile(styleSheetUrl, styleSheetFile);
+                    } catch (IOException ie) {
+                        throw new MojoExecutionException(
+                                "Failed to write to " + styleSheetFile.getPath(), ie);
+                    }
+                }
+            }
+        }
+    }
     /**
      * Get absolute path to a temporary Olink target database XML document that
      * points to the individual generated Olink DB files, for single page HTML.
@@ -412,7 +602,7 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                 String sysId = getBuildDirectory().getAbsolutePath()
                         + File.separator + docName + "-single.target.db";
 */
-                String sysId = baseDir.getAbsolutePath()
+                String sysId = getBaseDir().getAbsolutePath()
                         + "/target/docbkx/html/" + docName + "/index.html.target.db";
 
                 content.append("<!ENTITY ").append(docName)
@@ -488,7 +678,7 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                 String sysId = getBuildDirectory().getAbsolutePath()
                         + File.separator + docName + "-chunked.target.db";
 */
-                String sysId = baseDir.getAbsolutePath() + "/target/docbkx/html/"
+                String sysId = getBaseDir().getAbsolutePath() + "/target/docbkx/html/"
                         + docName + "/index.html.target.db";
 
                 content.append("<!ENTITY ").append(docName)
@@ -572,10 +762,10 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                     "UTF-8");
             replacements.put("<html>", doctype);
 
-            String javascript = IOUtils.toString(getClass()
-                    .getResourceAsStream("/endhead-js-favicon.txt"), "UTF-8");
-            javascript = javascript.replace("FAVICON-LINK", getFaviconLink());
-            replacements.put("</head>", javascript);
+            String favicon = IOUtils.toString(getClass()
+                    .getResourceAsStream("/endhead-favicon.txt"), "UTF-8");
+            favicon = favicon.replace("FAVICON-LINK", getFaviconLink());
+            replacements.put("</head>", favicon);
 
             String linkToJira = getLinkToJira();
             String gascript = IOUtils.toString(
@@ -584,11 +774,6 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
             replacements.put("</body>", linkToJira + "\n" + gascript);
 
             HTMLUtils.updateHTML(htmlDir, replacements);
-
-            getLog().info("Adding CSS...");
-            File css = new File(getBuildDirectory().getPath(), getPreSiteCssFileName());
-            HTMLUtils.addCss(htmlDir, css,
-                    FilenameUtils.getBaseName(getDocumentSrcName()) + ".html");
         } catch (IOException e) {
             throw new MojoExecutionException(
                     "Failed to update output HTML correctly: " + e.getMessage());
@@ -638,6 +823,71 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
             link = link.replaceFirst("JIRA-URL", jiraURL);
         }
         return link;
+    }
+
+    /**
+     * Get absolute path to a temporary Olink target database XML document that
+     * points to the individual generated Olink DB files, for webhelp.
+     *
+     * @return Absolute path to the temporary file
+     * @throws MojoExecutionException Could not write target DB file.
+     */
+    final String buildWebHelpTargetDB() throws MojoExecutionException {
+
+        File targetDB = new File(getBuildDirectory() + File.separator + "olinkdb-webhelp.xml");
+
+        try {
+            StringBuilder content = new StringBuilder();
+            content.append("<?xml version='1.0' encoding='utf-8'?>\n")
+                    .append("<!DOCTYPE targetset [\n");
+
+            String targetDbDtd = IOUtils.toString(getClass()
+                    .getResourceAsStream("/targetdatabase.dtd"));
+            content.append(targetDbDtd).append("\n");
+
+            Set<String> docNames = DocUtils.getDocumentNames(
+                    sourceDirectory, getDocumentSrcName());
+            if (docNames.isEmpty()) {
+                throw new MojoExecutionException("No document names found.");
+            }
+
+            for (String docName : docNames) {
+
+/*  <targetsFilename> is ignored with docbkx-tools 2.0.15.
+                String sysId = getBuildDirectory().getAbsolutePath()
+                        + File.separator + docName + "-webhelp.target.db";
+*/
+                String sysId = getBaseDir().getAbsolutePath()
+                        + "/target/docbkx/webhelp/" + docName + "/index.webhelp.target.db";
+
+                content.append("<!ENTITY ").append(docName)
+                        .append(" SYSTEM '").append(sysId).append("'>\n");
+            }
+
+            content.append("]>\n")
+
+                    .append("<targetset>\n")
+                    .append(" <targetsetinfo>Target DB for ForgeRock DocBook content,\n")
+                    .append(" for use with webhelp only.</targetsetinfo>\n")
+                    .append(" <sitemap>\n")
+                    .append("  <dir name='doc'>\n");
+
+            for (String docName : docNames) {
+                content.append("   <document targetdoc='").append(docName).append("'\n")
+                        .append("             baseuri='../").append(docName).append("/'>\n")
+                        .append("    &").append(docName).append(";\n")
+                        .append("   </document>\n");
+            }
+            content.append("  </dir>\n")
+                    .append(" </sitemap>\n")
+                    .append("</targetset>\n");
+
+            FileUtils.writeStringToFile(targetDB, content.toString());
+        } catch (IOException e) {
+            throw new MojoExecutionException(
+                    "Failed to write link target database: " + e.getMessage());
+        }
+        return targetDB.getPath();
     }
 
     /**
@@ -778,6 +1028,63 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
      */
     public final File getChunkedHTMLCustomization() {
         return new File(getBuildDirectory(), chunkedHTMLCustomization);
+    }
+
+    /**
+     * Webhelp XSL stylesheet customization file, relative to the build
+     * directory.
+     * <p/>
+     * docbkx-tools element: &lt;webhelpCustomization&gt;
+     *
+     * @parameter default-value="docbkx-stylesheets/webhelp/coredoc.xsl"
+     * @required
+     */
+    private String webhelpCustomization;
+
+    /**
+     * Webhelp XSL stylesheet customization file, relative to the build
+     * directory.
+     * <p/>
+     * docbkx-tools element: &lt;webhelpCustomization&gt;
+     *
+     * @return {@link #webhelpCustomization}
+     */
+    public final File getWebHelpCustomization() {
+        return new File(getBuildDirectory(), webhelpCustomization);
+    }
+
+    /**
+     * Logo for webhelp documents.
+     *
+     * @parameter default-value="docbkx-stylesheets/webhelp/logo.png" property="webhelpLogo"
+     * @required
+     */
+    private String webhelpLogo;
+
+    /**
+     * Logo for webhelp documents.
+     *
+     * @return {@link #webhelpLogo}
+     */
+    public final File getWebHelpLogo() {
+        return new File(getBuildDirectory(), webhelpLogo);
+    }
+
+    /**
+     * Main CSS for webhelp documents.
+     *
+     * @parameter default-value="docbkx-stylesheets/webhelp/positioning.css" property="webhelpCss"
+     * @required
+     */
+    private String webhelpCss;
+
+    /**
+     * Main CSS for webhelp documents.
+     *
+     * @return {@link #webhelpCss}
+     */
+    public final File getWebHelpCss() {
+        return new File(getBuildDirectory(), webhelpCss);
     }
 
     /**
@@ -936,10 +1243,11 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
          *
          * @param docType Type of output document such as {@code epub} or {@code html}
          * @param baseName Directory name to add, such as {@code index}.
+         * @param outBaseDir Base directory where the output is found.
          *
          * @throws MojoExecutionException Something went wrong copying images.
          */
-        private void copyImages(final String docType, final String baseName)
+        private void copyImages(final String docType, final String baseName, final File outBaseDir)
                 throws MojoExecutionException {
 
             Set<String> docNames = DocUtils.getDocumentNames(
@@ -960,8 +1268,7 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
 
                 // Copy images specific to the document.
                 File srcDir = new File(sourceDirectory, docName + s + "images");
-                File destDir = new File(getDocbkxOutputDirectory(),
-                        docType + s + docName + extra + s + "images");
+                File destDir = new File(outBaseDir, docType + s + docName + extra + s + "images");
                 try {
                     if (srcDir.exists()) {
                         FileUtils.copyDirectory(srcDir, destDir, onlyImages);
@@ -974,8 +1281,7 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                 // Copy any shared images.
                 String shared = "shared" + s + "images";
                 srcDir = new File(sourceDirectory, shared);
-                destDir = new File(getDocbkxOutputDirectory(),
-                        docType + s + docName + extra + s + shared);
+                destDir = new File(outBaseDir, docType + s + docName + extra + s + shared);
                 try {
                     if (srcDir.exists()) {
                         FileUtils.copyDirectory(srcDir, destDir, onlyImages);
@@ -985,6 +1291,11 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                             "Failed to copy images from " + srcDir + " to " + destDir);
                 }
             }
+        }
+
+        private void copyImages(final String docType, final String baseName)
+                throws MojoExecutionException {
+            copyImages(docType, baseName, getDocbkxOutputDirectory());
         }
 
         private void copyImages(final String docType) throws MojoExecutionException {
@@ -1139,14 +1450,22 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                         executionEnvironment(getProject(), getSession(),
                                 getPluginManager()));
 
-
-                File outputDir = new File(getDocbkxOutputDirectory(),
-                        extension + File.separator + docName);
+                // <targetsFilename> is ignored with docbkx-tools 2.0.15:
+                //File outputDir = new File(getDocbkxOutputDirectory(),
+                //        extension + File.separator + docName);
+                File outputDir = new File(getBaseDir(),
+                        "target" + File.separator + "docbkx" + File.separator
+                                + extension + File.separator + docName);
                 try {
-                    FileUtils.deleteDirectory(outputDir);
+                    String[] extensions = {"fo", extension};
+                    Iterator<File> files =
+                            FileUtils.iterateFiles(outputDir, extensions, true);
+                    while (files.hasNext()) {
+                        FileUtils.forceDelete(files.next());
+                    }
                 } catch (IOException e) {
                     throw new MojoExecutionException(
-                            "Cannot delete " + outputDir + ": " + e.getMessage());
+                            "Cannot delete a file: " + e.getMessage());
                 }
             }
         }
@@ -1351,6 +1670,56 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
         }
 
         /**
+         * Add custom CSS with XML wrapper to document source directories.
+         * See <a href="http://docbook.sourceforge.net/release/xsl/current/doc/html/custom.css.source.html"
+         * >custom.css.source</a> for details.
+         *
+         * @throws MojoExecutionException Failed to add custom CSS.
+         */
+        void addCustomCss() throws MojoExecutionException {
+
+            // For each document source directory, add CSS with an XML wrapper.
+            final String cssFileName = getPreSiteCssFileName();
+            final File cssFile = new File(getBuildDirectory(), cssFileName);
+
+            if (!cssFile.exists()) {
+                throw new MojoExecutionException(cssFile.getPath() + " not found");
+            }
+
+            final String cssString;
+            try {
+                cssString = FileUtils.readFileToString(cssFile);
+            } catch (IOException ie) {
+                throw new MojoExecutionException(
+                        "Failed to read CSS " + cssFile.getPath(), ie);
+            }
+
+            Set<String> docNames = DocUtils.getDocumentNames(
+                    sourceDirectory, getDocumentSrcName());
+            if (docNames.isEmpty()) {
+                throw new MojoExecutionException("No document names found.");
+            }
+
+            for (String docName : docNames) {
+
+                final File parent = new File(sourceDirectory, docName);
+                final File xmlFile = new File(parent, cssFileName + ".xml");
+
+                try {
+                    FileUtils.write(xmlFile, "<?xml version=\"1.0\"?>\n", true);
+                    FileUtils.write(xmlFile, "<style>\n", true);
+                    FileUtils.write(xmlFile, cssString, true);
+                    FileUtils.write(xmlFile, "</style>\n", true);
+                } catch (IOException ie) {
+                    throw new MojoExecutionException(
+                            "Failed to write XML to " + xmlFile.getPath(), ie);
+                }
+
+            }
+
+        }
+
+        /**
          * Prepare Olink database files for single page HTML output.
          *
          * @param baseConfiguration Common configuration for all executions
@@ -1396,15 +1765,6 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                         configuration(cfg.toArray(new Element[cfg.size()])),
                         executionEnvironment(getProject(), getSession(),
                                 getPluginManager()));
-
-                File outputDir = new File(getDocbkxOutputDirectory(), "html"
-                        + File.separator + docName);
-                try {
-                    FileUtils.deleteDirectory(outputDir);
-                } catch (IOException e) {
-                    throw new MojoExecutionException("Cannot delete "
-                            + outputDir);
-                }
             }
         }
 
@@ -1494,16 +1854,6 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                         configuration(cfg.toArray(new Element[cfg.size()])),
                         executionEnvironment(getProject(), getSession(),
                                 getPluginManager()));
-
-                File outputDir = new File(getDocbkxOutputDirectory(), "html"
-                        + File.separator + docName + File.separator
-                        + FilenameUtils.getBaseName(getDocumentSrcName()));
-                try {
-                    FileUtils.deleteDirectory(outputDir);
-                } catch (IOException e) {
-                    throw new MojoExecutionException("Cannot delete "
-                            + outputDir);
-                }
             }
         }
 
@@ -1554,6 +1904,116 @@ public class PreSiteBuildMojo extends AbstractBuildMojo {
                         configuration(cfg.toArray(new Element[cfg.size()])),
                         executionEnvironment(getProject(), getSession(),
                                 getPluginManager()));
+            }
+        }
+
+        /**
+         * Prepare Olink database files for webhelp output.
+         *
+         * @param baseConfiguration Common configuration for all executions
+         * @throws MojoExecutionException Failed to prepare the target DB files.
+         */
+        void buildWebHelpOlinkDB(final ArrayList<MojoExecutor.Element> baseConfiguration)
+                throws MojoExecutionException {
+
+            ArrayList<MojoExecutor.Element> cfg = new ArrayList<MojoExecutor.Element>();
+            cfg.addAll(baseConfiguration);
+
+            cfg.add(element(name("webhelpAutolabel"), "1"));
+            cfg.add(element(name("webhelpCustomization"),
+                    FilenameUtils.separatorsToUnix(getWebHelpCustomization().getPath())));
+
+            Set<String> docNames = DocUtils.getDocumentNames(
+                    sourceDirectory, getDocumentSrcName());
+            if (docNames.isEmpty()) {
+                throw new MojoExecutionException("No document names found.");
+            }
+
+            for (String docName : docNames) {
+                cfg.add(element(name("collectXrefTargets"), "only"));
+                cfg.add(element(name("currentDocid"), docName));
+                cfg.add(element(name("includes"), docName + "/" + getDocumentSrcName()));
+
+/*  <targetsFilename> is ignored with docbkx-tools 2.0.15.
+                cfg.add(element(
+                        name("targetsFilename"),
+                        FilenameUtils.separatorsToUnix(getBuildDirectory()
+                                .getPath())
+                                + "/"
+                                + docName
+                                + "-webhelp.target.db"));
+*/
+                executeMojo(
+                        plugin(groupId("com.agilejava.docbkx"),
+                                artifactId("docbkx-maven-plugin"),
+                                version(getDocbkxVersion())),
+                        goal("generate-webhelp"),
+                        configuration(cfg.toArray(new Element[cfg.size()])),
+                        executionEnvironment(getProject(), getSession(),
+                                getPluginManager()));
+            }
+        }
+
+        /**
+         * Build webhelp from DocBook XML sources.
+         *
+         * @param baseConfiguration Common configuration for all executions
+         * @throws MojoExecutionException Failed to build the output.
+         */
+        void buildWebHelp(final ArrayList<MojoExecutor.Element> baseConfiguration)
+                throws MojoExecutionException {
+
+            ArrayList<MojoExecutor.Element> cfg = new ArrayList<MojoExecutor.Element>();
+            cfg.addAll(baseConfiguration);
+
+            cfg.add(element(name("webhelpAutolabel"), "1"));
+            cfg.add(element(name("webhelpCustomization"),
+                    FilenameUtils.separatorsToUnix(getWebHelpCustomization().getPath())));
+
+            cfg.add(element(name("targetDatabaseDocument"), buildWebHelpTargetDB()));
+
+            final File webHelpBase = new File(getDocbkxOutputDirectory(), "webhelp");
+            cfg.add(element(name("targetDirectory"), FilenameUtils
+                    .separatorsToUnix(webHelpBase.getPath())));
+
+            copyImages("webhelp");
+
+            Set<String> docNames = DocUtils.getDocumentNames(
+                    sourceDirectory, getDocumentSrcName());
+            if (docNames.isEmpty()) {
+                throw new MojoExecutionException("No document names found.");
+            }
+
+            for (String docName : docNames) {
+                cfg.add(element(name("currentDocid"), docName));
+                cfg.add(element(name("includes"), docName + "/" + getDocumentSrcName()));
+
+                executeMojo(
+                        plugin(groupId("com.agilejava.docbkx"),
+                                artifactId("docbkx-maven-plugin"),
+                                version(getDocbkxVersion())),
+                        goal("generate-webhelp"),
+                        configuration(cfg.toArray(new Element[cfg.size()])),
+                        executionEnvironment(getProject(), getSession(),
+                                getPluginManager()));
+
+                // Copy CSS and logo into place in the new webhelp output.
+                final File webHelpCss = new File(webHelpBase,
+                        docName + File.separator
+                                + "common" + File.separator
+                                + "css" + File.separator
+                                + "positioning.css");
+                final File webHelpLogo = new File(webHelpBase,
+                        docName + File.separator
+                                + "common" + File.separator
+                                + "images" + File.separator
+                                + "logo.png");
+                try {
+                    FileUtils.copyFile(getWebHelpCss(), webHelpCss);
+                    FileUtils.copyFile(getWebHelpLogo(), webHelpLogo);
+                } catch (IOException ie) {
+                    throw new MojoExecutionException("Failed to copy file", ie);
+                }
             }
         }
     }

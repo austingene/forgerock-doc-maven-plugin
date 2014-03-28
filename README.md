@@ -3,15 +3,15 @@
 This Maven plugin centralizes configuration of core documentation, to ensure
 that documents are formatted uniformly.
 
-_This document covers functionality present in 2.0.0._
+_This document covers functionality present in 2.1.0-SNAPSHOT._
 
 With centralized configuration handled by this Maven plugin, the core
-documentation-related project configuration takes at least two arguments:
+documentation-related project configuration takes at least three arguments:
 
 *   `<projectName>`: the short name for the project such as OpenAM, OpenDJ,
     OpenICF, OpenIDM, OpenIG, and so forth
-*   `<googleAnalyticsId>`: to add Google Analytics JavaScript to the HTML
-    output
+*   `<projectVersion>`: the version, such as `1.0.0-SNAPSHOT`, or `3.3.1`
+*   `<googleAnalyticsId>`: to add Google Analytics JavaScript to HTML output
 
 The project runs multiple plugin executions:
 
@@ -37,6 +37,7 @@ POM property called `gaId`, whose value is the Google Analytics ID.
            <inherited>false</inherited>
            <configuration>
             <projectName>MyProject</projectName>
+            <projectVersion>1.0.0-SNAPSHOT</projectVersion>
             <googleAnalyticsId>${gaId}</googleAnalyticsId>
            </configuration>
            <executions>
@@ -256,6 +257,7 @@ excludes all formats but HTML from the build.
       <exclude>man</exclude>
       <exclude>pdf</exclude>
       <exclude>rtf</exclude>
+      <exclude>webhelp</exclude>
      </excludes>
 
 ## Generating Single-Chapter Output
@@ -267,12 +269,14 @@ named `chap-one.xml`, then you would set `documentSrcName` as follows.
 
     mvn -DdocumentSrcName=chap-one.xml clean pre-site
 
+## Generating Only One Format
+
 If you want only one type of output, then specify that using `include`.
 The following command generates only PDF output for your single chapter.
 
     mvn -DdocumentSrcName=chap-one.xml -Dinclude=pdf clean pre-site
 
-Formats include `epub`, `html`, `man`, `pdf`, and `rtf`.
+Formats include `epub`, `html`, `man`, `pdf`, `rtf`, and `webhelp`.
 
 ## Alternate Branding
 
@@ -312,17 +316,24 @@ ID using the property.
      mvn -DisDraftMode=no -DreleaseVersion=1.0.0 -D"gaId=UA-23412190-14" \
      -D"releaseDate=Software release date: January 1, 1970" \
      -D"pubDate=Publication date: December 31, 1969" \
+     -DbuildReleaseZip=true \
      clean site org.forgerock.commons:forgerock-doc-maven-plugin:release
 
 Both dates are reflected in the documents to publish.
 * The `releaseDate` indicates the date the software was released.
 * The `pubDate` indicates the date you published the documentation.
 
+If the plugin configuration is not inherited,
+then also set `-N` (`--non-recursive`) for the release goal.
+Run the `site` goal separately if it must be recursive
+(because you build Javadoc during the `site` goal for example).
+
 ## Zip of Release Documentation
 
 To build a .zip of the release documentation, you can further set
 `-DbuildReleaseZip=true` when running the `release` goal on the command line,
 or `<buildReleaseZip>true</buildReleaseZip>` in the execution configuration.
+Also set `-DprojectName=MyProject` if you perform the `release` goal separately.
 
 The file, `projectName-releaseVersion-docs.zip`, can be found
 after the build in the project build directory. When unzipped, it unpacks
@@ -337,10 +348,12 @@ you must still build the final release .zip yourself.
 
 ## Notes on Syntax Highlighting
 
-Uses [SyntaxHighlighter](http://alexgorbatchev.com/SyntaxHighlighter/) 3.0.83,
+Uses [SyntaxHighlighter](http://alexgorbatchev.com/SyntaxHighlighter/),
 rather than DocBook's syntax highlighting capabilities for HTML output, as
 SyntaxHighlighter includes handy features for selecting and numbering lines
 in HTML.
+
+The highlighting operates only inside `<programlisting>`.
 
      Source         SyntaxHighlighter   Brush Name
      ---            ---                 ---
@@ -390,6 +403,7 @@ following example:
 See the `forgerock-doc-maven-plugin-test` project for an example.
 
 * * *
+
 This work is licensed under the Creative Commons
 Attribution-NonCommercial-NoDerivs 3.0 Unported License.
 To view a copy of this license, visit
@@ -397,4 +411,4 @@ To view a copy of this license, visit
 or send a letter to Creative Commons, 444 Castro Street,
 Suite 900, Mountain View, California, 94041, USA.
 
-Copyright 2012-2013 ForgeRock AS
+Copyright 2012-2014 ForgeRock AS
