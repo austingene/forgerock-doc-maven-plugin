@@ -337,7 +337,7 @@ abstract class AbstractBuildMojo extends AbstractMojo {
     /**
      * Version of the branding artifact to use.
      *
-     * @parameter default-value="2.1.0" property="brandingVersion"
+     * @parameter default-value="3.0.0-SNAPSHOT" property="brandingVersion"
      * @required
      */
     private String brandingVersion;
@@ -536,7 +536,7 @@ abstract class AbstractBuildMojo extends AbstractMojo {
     }
 
     /**
-     * Build directory for this plugin, usually {@code ${project.build.directory}.
+     * Build directory for this plugin, usually {@code ${project.build.directory}}.
      *
      * @return {@link #buildDirectory}
      */
@@ -665,4 +665,37 @@ abstract class AbstractBuildMojo extends AbstractMojo {
     public boolean useSharedContent() {
         return useSharedContent;
     }
+
+    /**
+     * CSS file for the pre-site version of the HTML.
+     *
+     * @parameter default-value="coredoc.css" property="preSiteCssFileName"
+     * @required
+     */
+    private String preSiteCssFileName;
+
+    /**
+     * Get the name of the CSS file for the pre-site version of the HTML.
+     * @return The file name
+     */
+    public final String getPreSiteCssFileName() {
+        return preSiteCssFileName;
+    }
+
+    /**
+     * CSS file for the release version of the HTML.
+     *
+     * @parameter default-value="dfo.css" property="releaseCssFileName"
+     * @required
+     */
+    private String releaseCssFileName;
+
+    /**
+     * Get the name of the CSS file for the release version of the HTML.
+     * @return The file name
+     */
+    public final String getReleaseCssFileName() {
+        return releaseCssFileName;
+    }
+
 }

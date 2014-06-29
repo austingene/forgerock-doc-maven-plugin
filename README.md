@@ -3,7 +3,7 @@
 This Maven plugin centralizes configuration of core documentation, to ensure
 that documents are formatted uniformly.
 
-_This document covers functionality present in 2.1.0-SNAPSHOT._
+_This document covers functionality present in 2.1.3._
 
 With centralized configuration handled by this Maven plugin, the core
 documentation-related project configuration takes at least three arguments:
@@ -22,6 +22,27 @@ The project runs multiple plugin executions:
 5.  A `build` goal in the `pre-site` phase to build and massage output
 6.  A `layout` goal in the `site` phase to copy content under `site/doc`
 7.  A `release` goal to prepare site documentation for release
+
+## Table of Contents
+
+* [Example Plugin Specification](#Example_Plugin_Specification)
+* [Source Layout Requirements](#Source_Layout_Requirements)
+* [Resolving Maven Properties](#Resolving_Maven_Properties)
+* [Using Shared Content](#Using_Shared_Content)
+* [PNG Image Manipulation](#PNG_Image_Manipulation)
+* [Link Checking](#Link_Checking)
+* [Excluding Output Formats](#Excluding_Output_Formats)
+* [Generating Single-Chapter Output](#Generating_Single-Chapter_Output)
+* [Generating Only One Format](#Generating_Only_One_Format)
+* [Alternate Branding](#Alternate_Branding)
+* [Expected Results](#Expected_Results)
+* [Release Layout](#Release_Layout)
+* [Hard Page Breaks in PDF and RTF](#Hard_Page_Breaks_in_PDF_and_RTF)
+* [Zip of Release Documentation](#Zip_of_Release_Documentation)
+* [Notes on Syntax Highlighting](#Notes_on_Syntax_Highlighting)
+* [JCite Integration](#JCite_Integration)
+* [Links in Shared Content](#Links_in_Shared_Content)
+
 
 ## Example Plugin Specification
 
@@ -328,6 +349,14 @@ then also set `-N` (`--non-recursive`) for the release goal.
 Run the `site` goal separately if it must be recursive
 (because you build Javadoc during the `site` goal for example).
 
+## Hard Page Breaks in PDF and RTF
+
+You can now use the processing instruction `<?hard-pagebreak?>`
+to force an unconditional page break in the PDF (and RTF) output.
+
+This processing instruction cannot be used inline,
+but instead must be used between block elements.
+
 ## Zip of Release Documentation
 
 To build a .zip of the release documentation, you can further set
@@ -401,6 +430,12 @@ following example:
     >[jcp:org.forgerock.doc.jcite.test.Test:--- mainMethod]</programlisting>
 
 See the `forgerock-doc-maven-plugin-test` project for an example.
+
+## Links in Shared Content
+
+You can now use `xlink:href="CURRENT.DOCID#linkend"` in your links.
+The doc build plugin replaces `CURRENT.DOCID` with the current document name.
+
 
 * * *
 
