@@ -436,6 +436,21 @@ See the `forgerock-doc-maven-plugin-test` project for an example.
 You can now use `xlink:href="CURRENT.DOCID#linkend"` in your links.
 The doc build plugin replaces `CURRENT.DOCID` with the current document name.
 
+## Highlighting Table Headers in PDF Output
+
+You can highlight table headers in PDFs by adding a processing directive
+'<?dbfo bgcolor=#EEEEEE" ?>' to a row element under thead. For
+example:
+    
+    <thead>
+     <row><?dbfo bgcolor="#EEEEEE"?>
+      <entry>Attribute</entry>
+      <entry>Indexes Required</entry>
+     </row>
+    </thead>
+    
+This feature will be fixed in a future version so that the processing
+directive will not be required.
 
 * * *
 
